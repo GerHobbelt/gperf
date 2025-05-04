@@ -748,8 +748,6 @@ Search::find_alpha_inc ()
 void
 Search::prepare_asso_values ()
 {
-  KeywordExt_List *temp;
-
   /* Initialize each keyword's _selchars array.  */
   init_selchars_multiset(_key_positions, _alpha_unify, _alpha_inc);
 
@@ -771,7 +769,7 @@ Search::prepare_asso_values ()
     Hash_Table representatives (_list_len, !_hash_includes_len);
 
     KeywordExt_List *prev = NULL; /* list node before temp */
-    for (temp = _head; temp; )
+    for (KeywordExt_List *temp = _head; temp; )
       {
         KeywordExt *keyword = temp->first();
         KeywordExt *other_keyword = representatives.insert (keyword);
@@ -836,7 +834,7 @@ Search::prepare_asso_values ()
   /* Compute the occurrences of each character in the alphabet.  */
   _occurrences = new int[_alpha_size];
   memset (_occurrences, 0, _alpha_size * sizeof (_occurrences[0]));
-  for (temp = _head; temp; temp = temp->rest())
+  for (KeywordExt_List *temp = _head; temp; temp = temp->rest())
     {
       KeywordExt *keyword = temp->first();
       const unsigned int *ptr = keyword->_selchars;
@@ -848,7 +846,7 @@ Search::prepare_asso_values ()
   _asso_values = new int[_alpha_size];
 
   /* Memory allocation in each Keyword.  */
-  for (temp = _head; temp; temp = temp->rest())
+  for (KeywordExt_List *temp = _head; temp; temp = temp->rest())
     {
       KeywordExt *keyword = temp->first();
       keyword->_undetermined_chars = new unsigned int[keyword->_selchars_length];
@@ -890,14 +888,12 @@ Search::prepare_asso_values ()
       int field_width;
 
       field_width = 0;
-      {
-        for (KeywordExt_List *temp = _head; temp; temp = temp->rest())
-          {
-            KeywordExt *keyword = temp->first();
-            if (field_width < keyword->_selchars_length)
-              field_width = keyword->_selchars_length;
-          }
-      }
+      for (KeywordExt_List *temp = _head; temp; temp = temp->rest())
+        {
+          KeywordExt *keyword = temp->first();
+          if (field_width < keyword->_selchars_length)
+            field_width = keyword->_selchars_length;
+        }
 
       fprintf (stderr, "\ndumping the keyword list without duplicates\n");
       fprintf (stderr, "keyword #, %*s, keyword\n", field_width, "keysig");
