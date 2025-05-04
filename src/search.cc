@@ -1,5 +1,5 @@
 /* Search algorithm for the default gperf algo.
-   Copyright (C) 1989-1998, 2000, 2002-2003, 2009, 2016 Free Software Foundation, Inc.
+   Copyright (C) 1989-1998, 2000, 2002-2003, 2009, 2016, 2025 Free Software Foundation, Inc.
    Written by Douglas C. Schmidt <schmidt@ics.uci.edu>
    and Bruno Haible <bruno@clisp.org>.
 
@@ -18,6 +18,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
+#include <config.h>
+
 /* Specification. */
 #include "search.h"
 
@@ -26,8 +28,11 @@
 #include <string.h> /* declares memset(), memcmp() */
 #include <time.h> /* declares time() */
 #include <math.h> /* declares exp() */
-#include <limits.h> /* defines INT_MIN, INT_MAX, UINT_MAX */
+#include <limits.h> /* defines INT_MIN, INT_MAX, UINT_MAX, CHAR_BIT */
+#include "gl_map.hh"
+#include "gl_hash_map.h"
 #include "options.h"
+#include "arraylist.h"
 #include "hash-table.h"
 //#include "config.h"
 #include "nbperf.h"
@@ -843,6 +848,13 @@ Search::prepare_asso_values ()
   /* Memory allocation.  */
   _asso_values = new int[_alpha_size];
 
+  /* Memory allocation in each Keyword.  */
+  for (temp = _head; temp; temp = temp->rest())
+    {
+      KeywordExt *keyword = temp->first();
+      keyword->_undetermined_chars = new unsigned int[keyword->_selchars_length];
+    }
+
   int non_linked_length = _list_len;
   unsigned int asso_value_max;
 
@@ -926,7 +938,7 @@ Search::prepare_asso_values ()
    is the set of characters c with _occurrences[c] > 0.  At the end, C
    is empty.)  To each keyword K, we associate the multiset of _selchars
    for which the _asso_values[] are undetermined:
-                    K  -->  K->_selchars intersect C.
+                    K  -->  K->_selchars ∩ C.
    Consider two keywords equivalent if their value under this mapping is
    the same.  This introduces an equivalence relation on the set of
    keywords.  The equivalence classes partition the keyword set.  (At the
@@ -943,22 +955,25 @@ Search::prepare_asso_values ()
 struct EquivalenceClass
 {
   /* The keywords in this equivalence class.  */
-  KeywordExt_List *     _keywords;
-  KeywordExt_List *     _keywords_last;
-  /* The number of keywords in this equivalence class.  */
-  unsigned int          _cardinality;
-  /* The undetermined selected characters for the keywords in this
-     equivalence class, as a canonically reordered multiset.  */
-  unsigned int *        _undetermined_chars;
-  unsigned int          _undetermined_chars_length;
+  ArrayList<KeywordExt*> _keywords;
 
-  EquivalenceClass *    _next;
+  /* Constructor.  */
+  EquivalenceClass () : _keywords () {}
+};
+
+struct Partition
+{
+  /* The equivalence classes in this partition.  */
+  ArrayList<EquivalenceClass> _equclasses;
+
+  /* Constructor.  */
+  Partition () : _equclasses () {}
 };
 
 struct Step
 {
   /* The characters whose values are being determined in this step.  */
-  unsigned int          _changing_count;
+  unsigned int          _changing_count;                      /* > 0 */
   unsigned int *        _changing;
   /* Exclusive upper bound for the _asso_values[c] of this step.
      A power of 2.  */
@@ -966,7 +981,7 @@ struct Step
   /* The characters whose values will be determined after this step.  */
   bool *                _undetermined;
   /* The keyword set partition after this step.  */
-  EquivalenceClass *    _partition;
+  Partition *           _partition;
   /* The expected number of iterations in this step.  */
   double                _expected_lower;
   double                _expected_upper;
@@ -988,83 +1003,114 @@ equals (const unsigned int *ptr1, const unsigned int *ptr2, unsigned int len)
   return true;
 }
 
-EquivalenceClass *
+static bool
+undetermined_equals (KeywordExt *key1, KeywordExt *key2)
+{
+  return (key1->_undetermined_chars_length == key2 ->_undetermined_chars_length)
+         && equals (key1->_undetermined_chars, key2->_undetermined_chars,
+                    key1->_undetermined_chars_length);
+}
+
+static size_t
+undetermined_hashcode (KeywordExt *key)
+{
+  return key->_undetermined_chars_hashcode;
+}
+
+/* Compares the equivalence classes cls1, cls2 pointed to by ptr1 and ptr2
+   and returns
+     < 0 if cls1 is larger than cls2,
+     0   if cls1 and cls2 have the same size,
+     > 0 if cls1 is smaller than cls1.  */
+static int
+cmp_equiv_classes (void const *ptr1, void const *ptr2)
+{
+  EquivalenceClass const *cls1 = static_cast<EquivalenceClass const *>(ptr1);
+  EquivalenceClass const *cls2 = static_cast<EquivalenceClass const *>(ptr2);
+  return _GL_CMP (cls2->_keywords.size(), cls1->_keywords.size());
+}
+
+Partition *
 Search::compute_partition (bool *undetermined) const
 {
-  EquivalenceClass *partition = NULL;
-  EquivalenceClass *partition_last = NULL;
+  /* Prepare the use of the hash-map: For each keyword,
+     compute the undetermined characters and their hash code.  */
   for (KeywordExt_List *temp = _head; temp; temp = temp->rest())
     {
       KeywordExt *keyword = temp->first();
 
-      /* Compute the undetermined characters for this keyword.  */
-      unsigned int *undetermined_chars =
-        new unsigned int[keyword->_selchars_length];
+      /* This scratch memory, an array of length keyword->_selchars_length,
+         was allocated earlier.  */
+      unsigned int *undetermined_chars = keyword->_undetermined_chars;
       unsigned int undetermined_chars_length = 0;
 
       for (int i = 0; i < keyword->_selchars_length; i++)
         if (undetermined[keyword->_selchars[i]])
           undetermined_chars[undetermined_chars_length++] = keyword->_selchars[i];
+      keyword->_undetermined_chars_length = undetermined_chars_length;
 
-      /* Look up the equivalence class to which this keyword belongs.  */
-      EquivalenceClass *equclass;
-      for (equclass = partition; equclass; equclass = equclass->_next)
-        if (equclass->_undetermined_chars_length == undetermined_chars_length
-            && equals (equclass->_undetermined_chars, undetermined_chars,
-                       undetermined_chars_length))
-          break;
-      if (equclass == NULL)
-        {
-          equclass = new EquivalenceClass();
-          equclass->_keywords = NULL;
-          equclass->_keywords_last = NULL;
-          equclass->_cardinality = 0;
-          equclass->_undetermined_chars = undetermined_chars;
-          equclass->_undetermined_chars_length = undetermined_chars_length;
-          equclass->_next = NULL;
-          if (partition)
-            partition_last->_next = equclass;
-          else
-            partition = equclass;
-          partition_last = equclass;
-        }
-      else
-        delete[] undetermined_chars;
-
-      /* Add the keyword to the equivalence class.  */
-      KeywordExt_List *cons = new KeywordExt_List(keyword);
-      if (equclass->_keywords)
-        equclass->_keywords_last->rest() = cons;
-      else
-        equclass->_keywords = cons;
-      equclass->_keywords_last = cons;
-      equclass->_cardinality++;
+      {
+        const int SIZE_BITS = sizeof (size_t) * CHAR_BIT;
+        size_t h = undetermined_chars_length;
+        for (unsigned int i = 0; i < undetermined_chars_length; i++)
+          h = undetermined_chars[i] * 641 + ((h << 9) | (h >> (SIZE_BITS - 9)));
+        keyword->_undetermined_chars_hashcode = h;
+      }
     }
 
-  /* Free some of the allocated memory.  The caller doesn't need it.  */
-  for (EquivalenceClass *cls = partition; cls; cls = cls->_next)
-    delete[] cls->_undetermined_chars;
+  Partition *partition = new Partition ();
+  {
+    /* A hash-map that maps each keyword to the EquivalenceClass that contains
+       it.  */
+    gl_Map<KeywordExt *, void const *>
+      map (GL_HASH_MAP, undetermined_equals, undetermined_hashcode, NULL, NULL);
+    for (KeywordExt_List *temp = _head; temp; temp = temp->rest())
+      {
+        KeywordExt *keyword = temp->first();
+
+        /* Look up the equivalence class to which this keyword belongs.  */
+        size_t pindex = reinterpret_cast<size_t>(map.get(keyword)) - 1;
+        if (pindex == (size_t)-1)
+          {
+            /* Allocate a new EquivalenceClass and add it as the last element to
+               the partition.  */
+            char temp_storage[sizeof (EquivalenceClass)];
+            EquivalenceClass * temp_equclass = new (temp_storage) EquivalenceClass ();
+            pindex = partition->_equclasses.add_last (* temp_equclass);
+
+            /* Map this keyword (and all equivalent ones that will be seen later)
+               to the equivalence class number pindex.  */
+            map.put(keyword, reinterpret_cast<void *>(pindex + 1));
+          }
+
+        /* Add the keyword to the equivalence class number pindex.  */
+        partition->_equclasses.get_at(pindex)._keywords.add_last (keyword);
+      }
+    map.free ();
+  }
+
+  /* Sort the equivalence classes according to decreasing size.
+     This results in a speedup of find_asso_values, because on average, a large
+     equivalence class has a higher probability for a collision than a smaller
+     equivalence class.  (An equivalence class with just 1 keyword never has
+     a collision.)  */
+  if (partition->_equclasses.size() > 1)
+    qsort (&partition->_equclasses.get_at(0), partition->_equclasses.size(),
+           sizeof (EquivalenceClass), cmp_equiv_classes);
 
   return partition;
 }
 
 static void
-delete_partition (EquivalenceClass *partition)
+delete_partition (Partition *partition)
 {
-  while (partition != NULL)
-    {
-      EquivalenceClass *equclass = partition;
-      partition = equclass->_next;
-      delete_list (equclass->_keywords);
-      //delete[] equclass->_undetermined_chars; // already freed above
-      delete equclass;
-    }
+  delete partition;
 }
 
 /* Compute the possible number of collisions when _asso_values[c] is
    chosen, leading to the given partition.  */
 unsigned int
-Search::count_possible_collisions (EquivalenceClass *partition, unsigned int c) const
+Search::count_possible_collisions (Partition *partition, unsigned int c) const
 {
   /* Every equivalence class p is split according to the frequency of
      occurrence of c, leading to equivalence classes p1, p2, ...
@@ -1073,14 +1119,18 @@ Search::count_possible_collisions (EquivalenceClass *partition, unsigned int c) 
   unsigned int sum = 0;
   unsigned int m = _max_selchars_length;
   DYNAMIC_ARRAY (split_cardinalities, unsigned int, m + 1);
-  for (EquivalenceClass *cls = partition; cls; cls = cls->_next)
+  size_t partition_size = partition->_equclasses.size();
+  for (size_t pindex = 0; pindex < partition_size; pindex++)
     {
+      EquivalenceClass *cls = & partition->_equclasses.get_at(pindex);
+
       for (unsigned int i = 0; i <= m; i++)
         split_cardinalities[i] = 0;
 
-      for (KeywordExt_List *temp = cls->_keywords; temp; temp = temp->rest())
+      size_t cls_size = cls->_keywords.size();
+      for (size_t index = 0; index < cls_size; index++)
         {
-          KeywordExt *keyword = temp->first();
+          KeywordExt *keyword = cls->_keywords.get_at(index);
 
           unsigned int count = 0;
           for (int i = 0; i < keyword->_selchars_length; i++)
@@ -1090,7 +1140,7 @@ Search::count_possible_collisions (EquivalenceClass *partition, unsigned int c) 
           split_cardinalities[count]++;
         }
 
-      sum += cls->_cardinality * cls->_cardinality;
+      sum += cls->_keywords.size() * cls->_keywords.size();
       for (unsigned int i = 0; i <= m; i++)
         sum -= split_cardinalities[i] * split_cardinalities[i];
     }
@@ -1101,22 +1151,26 @@ Search::count_possible_collisions (EquivalenceClass *partition, unsigned int c) 
 /* Test whether adding c to the undetermined characters changes the given
    partition.  */
 bool
-Search::unchanged_partition (EquivalenceClass *partition, unsigned int c) const
+Search::unchanged_partition (Partition *partition, unsigned int c) const
 {
-  for (EquivalenceClass *cls = partition; cls; cls = cls->_next)
+  size_t partition_size = partition->_equclasses.size();
+  for (size_t pindex = 0; pindex < partition_size; pindex++)
     {
+      EquivalenceClass *cls = & partition->_equclasses.get_at(pindex);
+
       unsigned int first_count = UINT_MAX;
 
-      for (KeywordExt_List *temp = cls->_keywords; temp; temp = temp->rest())
+      size_t cls_size = cls->_keywords.size();
+      for (size_t index = 0; index < cls_size; index++)
         {
-          KeywordExt *keyword = temp->first();
+          KeywordExt *keyword = cls->_keywords.get_at(index);
 
           unsigned int count = 0;
           for (int i = 0; i < keyword->_selchars_length; i++)
             if (keyword->_selchars[i] == c)
               count++;
 
-          if (temp == cls->_keywords)
+          if (index == 0)
             first_count = count;
           else if (count != first_count)
             /* c would split this equivalence class.  */
@@ -1149,7 +1203,7 @@ Search::find_asso_values ()
     for (;;)
       {
         /* Compute the partition that needs to be refined.  */
-        EquivalenceClass *partition = compute_partition (undetermined);
+        Partition *partition = compute_partition (undetermined);
 
         /* Determine the main character to be chosen in this step.
            Choosing such a character c has the effect of splitting every
@@ -1176,7 +1230,7 @@ Search::find_asso_values ()
           if (best_possible_collisions == UINT_MAX)
             {
               /* All c with _occurrences[c] > 0 are undetermined.  We are
-                 are the starting situation and don't need any more step.  */
+                 at the starting situation and don't need any more step.  */
               delete_partition (partition);
               break;
             }
@@ -1195,7 +1249,7 @@ Search::find_asso_values ()
         /* Now determine how the equivalence classes will be before this
            step.  */
         undetermined[chosen_c] = true;
-        partition = compute_partition (undetermined);
+        Partition *partition_before = compute_partition (undetermined);
 
         /* Now determine which other characters should be determined in this
            step, because they will not change the equivalence classes at
@@ -1204,13 +1258,13 @@ Search::find_asso_values ()
            of the equivalence class.  */
         for (unsigned int c = 0; c < _alpha_size; c++)
           if (_occurrences[c] > 0 && determined[c]
-              && unchanged_partition (partition, c))
+              && unchanged_partition (partition_before, c))
             {
               undetermined[c] = true;
               determined[c] = false;
             }
 
-        /* main_c must be one of these.  */
+        /* chosen_c must be one of these.  */
         if (determined[chosen_c])
           abort ();
 
@@ -1228,6 +1282,11 @@ Search::find_asso_values ()
           if (undetermined[c] && !step->_undetermined[c])
             changing[changing_count++] = c;
 
+        /* The set of changing characters is non-empty, since it contains
+           chosen_c.  */
+        if (changing_count == 0)
+          abort ();
+
         step->_changing = changing;
         step->_changing_count = changing_count;
 
@@ -1240,7 +1299,7 @@ Search::find_asso_values ()
           exp (static_cast<double>(chosen_possible_collisions)
                / static_cast<double>(_asso_value_max));
 
-        delete_partition (partition);
+        delete_partition (partition_before);
 
         step->_next = steps;
         steps = step;
@@ -1266,12 +1325,16 @@ Search::find_asso_values ()
           fprintf (stderr, "], expected number of iterations between %g and %g.\n",
                    step->_expected_lower, step->_expected_upper);
           fprintf (stderr, "Keyword equivalence classes:\n");
-          for (EquivalenceClass *cls = step->_partition; cls; cls = cls->_next)
+          Partition *partition = step->_partition;
+          size_t partition_size = partition->_equclasses.size();
+          for (size_t pindex = 0; pindex < partition_size; pindex++)
             {
+              EquivalenceClass *cls = & partition->_equclasses.get_at(pindex);
               fprintf (stderr, "\n");
-              for (KeywordExt_List *temp = cls->_keywords; temp; temp = temp->rest())
+              size_t cls_size = cls->_keywords.size();
+              for (size_t index = 0; index < cls_size; index++)
                 {
-                  KeywordExt *keyword = temp->first();
+                  KeywordExt *keyword = cls->_keywords.get_at(index);
                   fprintf (stderr, "  %.*s\n",
                            keyword->_allchars_length, keyword->_allchars);
                 }
@@ -1292,6 +1355,8 @@ Search::find_asso_values ()
 
       /* Initialize the asso_values[].  */
       unsigned int k = step->_changing_count;
+      if (k == 0)
+        abort ();
       for (unsigned int i = 0; i < k; i++)
         {
           unsigned int c = step->_changing[i];
@@ -1308,28 +1373,38 @@ Search::find_asso_values ()
 
       for (;;)
         {
+          /* Cache some values in local variables, for speed.  */
+          bool hash_includes_len = _hash_includes_len;
+          bool *undetermined = step->_undetermined;
+          int *asso_values = _asso_values;
+
           /* Test whether these asso_values[] lead to collisions among
              the equivalence classes that should be collision-free.  */
           bool has_collision = false;
-          for (EquivalenceClass *cls = step->_partition; cls; cls = cls->_next)
+          Partition *partition = step->_partition;
+          size_t partition_size = partition->_equclasses.size();
+          for (size_t pindex = 0; pindex < partition_size; pindex++)
             {
+              EquivalenceClass *cls = & partition->_equclasses.get_at(pindex);
+
               /* Iteration Number array is a win, O(1) initialization time!  */
               _collision_detector->clear ();
 
-              for (KeywordExt_List *ptr = cls->_keywords; ptr; ptr = ptr->rest())
+              size_t cls_size = cls->_keywords.size();
+              for (size_t index = 0; index < cls_size; index++)
                 {
-                  KeywordExt *keyword = ptr->first();
+                  KeywordExt *keyword = cls->_keywords.get_at(index);
 
                   /* Compute the new hash code for the keyword, leaving apart
                      the yet undetermined asso_values[].  */
                   int hashcode;
                   {
-                    int sum = _hash_includes_len ? keyword->_allchars_length : 0;
+                    int sum = hash_includes_len ? keyword->_allchars_length : 0;
                     const unsigned int *p = keyword->_selchars;
                     int i = keyword->_selchars_length;
                     for (; i > 0; p++, i--)
-                      if (!step->_undetermined[*p])
-                        sum += _asso_values[*p];
+                      if (!undetermined[*p])
+                        sum += asso_values[*p];
                     hashcode = sum;
                   }
 
@@ -1575,6 +1650,13 @@ Search::find_good_asso_values ()
               _alpha_size * sizeof (_asso_values[0]));
       delete[] best_asso_values;
       /* The keywords' _hash_value fields are recomputed below.  */
+    }
+
+  /* Memory deallocation in each Keyword.  */
+  for (KeywordExt_List *temp = _head; temp; temp = temp->rest())
+    {
+      KeywordExt *keyword = temp->first();
+      delete[] keyword->_undetermined_chars;
     }
 }
 

@@ -1,6 +1,6 @@
 # Makefile for gperf/src
 
-# Copyright (C) 1989, 1992-1993, 1998, 2000, 2002-2003, 2006, 2009, 2012, 2020 Free Software Foundation, Inc.
+# Copyright (C) 1989, 1992-1993, 1998, 2000, 2002-2003, 2006, 2009, 2012, 2020, 2025 Free Software Foundation, Inc.
 # Written by Douglas C. Schmidt <schmidt@ics.uci.edu>
 # and Bruno Haible <bruno@clisp.org>.
 #
@@ -63,17 +63,23 @@ SHELL = /bin/sh
 
 VPATH = $(srcdir)
 
-OBJECTS =  main.$(OBJEXT) version.$(OBJEXT) positions.$(OBJEXT)		\
-           options.$(OBJEXT) keyword.$(OBJEXT) keyword-list.$(OBJEXT)	\
-           input.$(OBJEXT) bool-array.$(OBJEXT) hash-table.$(OBJEXT)	\
-           search.$(OBJEXT) output.$(OBJEXT) nbperf-chm.$(OBJEXT)	\
-		   output-javascript.$(OBJEXT) output-lua.$(OBJEXT)           \
-           nbperf-chm3.$(OBJEXT) nbperf-bdz.$(OBJEXT)			\
-           graph2.$(OBJEXT) graph3.$(OBJEXT) mi_vector_hash.$(OBJEXT)
-# These need to be included into generated MPH .c code */
-HASHES   = mi_vector_hash.c wyhash3.h wyhash.h fnv3.h fnv.h crc3.h
+OBJECTS = \
+  version.$(OBJEXT) \
+  positions.$(OBJEXT) \
+  options.$(OBJEXT) \
+  keyword.$(OBJEXT) \
+  keyword-list.$(OBJEXT) \
+  input.$(OBJEXT) \
+  arraylist.$(OBJEXT) \
+  bool-array.$(OBJEXT) \
+  hash-table.$(OBJEXT) \
+  search.$(OBJEXT) \
+  output.$(OBJEXT) \
+  main.$(OBJEXT)
 LIBS     = ../lib/libgp.a @GPERF_LIBM@
-CPPFLAGS = @CPPFLAGS@ -I. -I$(srcdir)/../lib -I$(srcdir)
+CPPFLAGS = @CPPFLAGS@ \
+           -I. -I$(srcdir) \
+           -I../lib -I$(srcdir)/../lib
 
 TARGETPROG = gperf$(EXEEXT)
 
@@ -99,31 +105,34 @@ OPTIONS_H = options.h options.icc $(POSITIONS_H)
 KEYWORD_H = keyword.h keyword.icc
 KEYWORD_LIST_H = keyword-list.h keyword-list.icc $(KEYWORD_H)
 INPUT_H = input.h $(KEYWORD_LIST_H)
+ARRAYLIST_H = arraylist.h
 BOOL_ARRAY_H = bool-array.h bool-array.icc $(OPTIONS_H)
 HASH_TABLE_H = hash-table.h $(KEYWORD_H)
 NBPERF_H = nbperf.h output.h $(KEYWORD_LIST_H) $(POSITIONS_H)
 SEARCH_H = search.h $(KEYWORD_LIST_H) $(POSITIONS_H) $(BOOL_ARRAY_H)
 OUTPUT_H = output.h output-javascript.h output-lua.h $(KEYWORD_LIST_H) $(POSITIONS_H)
 
-version.$(OBJEXT): version.cc $(VERSION_H)
+version.$(OBJEXT): version.cc $(CONFIG_H) $(VERSION_H)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $(srcdir)/version.cc
-positions.$(OBJEXT): positions.cc $(POSITIONS_H)
+positions.$(OBJEXT): positions.cc $(CONFIG_H) $(POSITIONS_H)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $(srcdir)/positions.cc
-options.$(OBJEXT): options.cc $(OPTIONS_H) $(VERSION_H) mi_vector_hash.h
+options.$(OBJEXT): options.cc $(CONFIG_H) $(OPTIONS_H) $(VERSION_H) mi_vector_hash.h
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $(srcdir)/options.cc
-keyword.$(OBJEXT): keyword.cc $(KEYWORD_H) $(POSITIONS_H)
+keyword.$(OBJEXT): keyword.cc $(CONFIG_H) $(KEYWORD_H) $(POSITIONS_H)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $(srcdir)/keyword.cc
-keyword-list.$(OBJEXT): keyword-list.cc $(KEYWORD_LIST_H)
+keyword-list.$(OBJEXT): keyword-list.cc $(CONFIG_H) $(KEYWORD_LIST_H)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $(srcdir)/keyword-list.cc
-input.$(OBJEXT): input.cc $(INPUT_H) $(OPTIONS_H)
+input.$(OBJEXT): input.cc $(CONFIG_H) $(INPUT_H) $(OPTIONS_H)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $(srcdir)/input.cc
-bool-array.$(OBJEXT): bool-array.cc $(BOOL_ARRAY_H) $(OPTIONS_H)
+arraylist.$(OBJEXT): arraylist.cc $(CONFIG_H) $(ARRAYLIST_H)
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $(srcdir)/arraylist.cc
+bool-array.$(OBJEXT): bool-array.cc $(CONFIG_H) $(BOOL_ARRAY_H) $(OPTIONS_H)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $(srcdir)/bool-array.cc
-hash-table.$(OBJEXT): hash-table.cc $(HASH_TABLE_H) $(OPTIONS_H)
+hash-table.$(OBJEXT): hash-table.cc $(CONFIG_H) $(HASH_TABLE_H) $(OPTIONS_H)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $(srcdir)/hash-table.cc
-search.$(OBJEXT): search.cc $(SEARCH_H) $(OPTIONS_H) $(HASH_TABLE_H) $(CONFIG_H) $(NBPERF_H)
+search.$(OBJEXT): search.cc $(CONFIG_H) $(SEARCH_H) $(OPTIONS_H) $(HASH_TABLE_H) $(ARRAYLIST_H) $(NBPERF_H)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $(srcdir)/search.cc
-output.$(OBJEXT): output.cc $(OUTPUT_H) $(OPTIONS_H) $(VERSION_H) $(CONFIG_H) $(NBPERF_H) output.ic
+output.$(OBJEXT): output.cc $(CONFIG_H) $(OUTPUT_H) $(OPTIONS_H) $(VERSION_H) $(NBPERF_H) output.ic
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $(srcdir)/output.cc
 output-javascript.$(OBJEXT): output-javascript.cc $(OUTPUT_H) $(OPTIONS_H) $(VERSION_H)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $(srcdir)/output-javascript.cc
@@ -141,7 +150,7 @@ nbperf-bdz.$(OBJEXT): nbperf-bdz.cc graph2.h $(NBPERF_H)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $(srcdir)/nbperf-bdz.cc
 mi_vector_hash.$(OBJEXT): mi_vector_hash.h mi_vector_hash.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c $(srcdir)/mi_vector_hash.c
-main.$(OBJEXT): main.cc $(OPTIONS_H) $(INPUT_H) $(SEARCH_H) $(OUTPUT_H)
+main.$(OBJEXT): main.cc $(CONFIG_H) $(OPTIONS_H) $(INPUT_H) $(SEARCH_H) $(OUTPUT_H)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $(srcdir)/main.cc
 output.ic: $(HASHES)
 	$(XXD) --version && ( \
@@ -190,6 +199,7 @@ SOURCE_FILES = \
   keyword.cc $(KEYWORD_H) \
   keyword-list.cc $(KEYWORD_LIST_H) \
   input.cc $(INPUT_H) \
+  arraylist.cc $(ARRAYLIST_H) \
   bool-array.cc $(BOOL_ARRAY_H) \
   hash-table.cc $(HASH_TABLE_H) \
   search.cc $(SEARCH_H) \

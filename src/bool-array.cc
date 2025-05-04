@@ -1,5 +1,5 @@
 /* Fast lookup table abstraction implemented as an Iteration Number Array
-   Copyright (C) 1989-1998, 2002-2003 Free Software Foundation, Inc.
+   Copyright (C) 1989-1998, 2002-2003, 2025 Free Software Foundation, Inc.
    Written by Douglas C. Schmidt <schmidt@ics.uci.edu>
    and Bruno Haible <bruno@clisp.org>.
 
@@ -18,6 +18,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
+#include <config.h>
+
 /* Specification. */
 #include "bool-array.h"
 
@@ -33,7 +35,7 @@ Bool_Array::~Bool_Array ()
     fprintf (stderr, "\ndumping boolean array information\n"
              "size = %d\niteration number = %d\nend of array dump\n",
              _size, _iteration_number);
-  delete[] const_cast<unsigned int *>(_storage_array);
+  delete[] const_cast<unsigned char *>(_storage_array);
 }
 
 #ifndef __OPTIMIZE__

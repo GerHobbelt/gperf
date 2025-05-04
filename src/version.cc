@@ -19,8 +19,10 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
+#include <config.h>
+
 /* Specification. */
 #include "version.h"
 
 /* Current release version. */
-const char *version_string = "3.3-beta";
+const char *version_string = "3.3";

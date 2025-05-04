@@ -1,6 +1,11 @@
 # Files brought in by gnulib-tool:
+/config.guess
+/config.sub
 /install-sh
 /mkinstalldirs
 /compile
 /ar-lib
+# Files brought in by automake:
+/depcomp
+/missing
 

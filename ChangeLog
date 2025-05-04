@@ -1,3 +1,208 @@
+2025-04-20  Bruno Haible  <bruno@clisp.org>
+
+	Release gperf-3.3.
+	* src/version.cc (version_string): Bump.
+	* tests/*.exp: Update.
+	* NEWS: Mention the changes.
+
+2025-04-20  Bruno Haible  <bruno@clisp.org>
+
+	Add two more assertions.
+	Suggested by Frank Wojcik.
+	* src/search.cc (Search::find_asso_values): Assert that a step's
+	_changing_count is positive.
+
+2025-04-20  Bruno Haible  <bruno@clisp.org>
+
+	Fix typo in comment.
+	Reported by Frank Wojcik.
+	* src/search.cc (Search::find_asso_values): Fix typo in comment.
+
+2025-04-20  Bruno Haible  <bruno@clisp.org>
+
+	Use an array-list instead of a linked-list of equiv.-classes, part 2.
+	* src/search.cc (Search::compute_partition): Fix a memory leak.
+
+2025-04-20  Bruno Haible  <bruno@clisp.org>
+
+	Use a hash table in compute_partition, part 2.
+	* src/search.cc (Search::compute_partition): Fix a memory leak.
+
+2025-04-19  Bruno Haible  <bruno@clisp.org>
+
+	Optimize: Test large equivalence classes for conflict first.
+	This reduces the execution time of gperf on large inputs by ca. 10%.
+	* src/search.cc (cmp_equiv_classes): New function.
+	(compute_partition): Sort the equivalence classes according to
+	decreasing size.
+
+2025-04-19  Bruno Haible  <bruno@clisp.org>
+
+	Refactor: Use an array-list instead of a linked-list of equiv.-classes.
+	* src/search.h (Search::compute_partition): Return a 'Partition *', not
+	a 'EquivalenceClass *'.
+	(Search::count_possible_collisions, Search::unchanged_partition): Change
+	parameter from 'EquivalenceClass *' to 'Partition *'.
+	* src/search.cc (struct EquivalenceClass): Remove field _next.
+	(struct Partition): New type.
+	(struct Step): Change type of _partition from 'EquivalenceClass *' to
+	'Partition *'.
+	(Search::compute_partition): Return a 'Partition *', not a
+	'EquivalenceClass *'.
+	(delete_partition): Update.
+	(Search::count_possible_collisions, Search::unchanged_partition): Change
+	parameter from 'EquivalenceClass *' to 'Partition *'.
+	(Search::find_asso_values): Update.
+
+2025-04-19  Bruno Haible  <bruno@clisp.org>
+
+	Optimize: Use an array-list instead of a linked-list of keywords.
+	Storing list elements in contiguous memory means: less cache misses.
+	This reduces the execution time of gperf on large inputs by ca. 30%.
+	* src/arraylist.h: New file.
+	* src/arraylist.cc: New file.
+	* src/Makefile.in (OBJECTS): Add arraylist.$(OBJEXT).
+	(ARRAYLIST_H): New variable.
+	(arraylist.$(OBJEXT)): New rule.
+	(search.$(OBJEXT)): Update dependencies.
+	(SOURCE_FILES): Add arraylist.cc and arraylist.h.
+	* src/search.cc: Include arraylist.h.
+	(struct EquivalenceClass): An an ArrayList field. Remove the linked-list
+	fields. Add a constructor.
+	(Search::compute_partition, delete_partition): Update.
+	(Search::count_possible_collisions, Search::unchanged_partition,
+	Search::find_asso_values): Update.
+
+2025-04-19  Bruno Haible  <bruno@clisp.org>
+
+	Optimize: Minimize object references in find_asso_values.
+	This reduces the execution time of gperf on large inputs by ca. 4%.
+	* src/search.cc (Search::find_asso_values): Cache some values in local
+	variables.
+
+2025-04-19  Bruno Haible  <bruno@clisp.org>
+
+	Optimize: Use a hash table in compute_partition.
+	This reduces the execution time of gperf on large inputs by ca. 30%.
+	* autogen.sh (GNULIB_MODULES): Add map-c++, hash-map.
+	* src/keyword.h: Include <stddef.h>.
+	(struct KeywordExt): Add fields _undetermined_chars,
+	_undetermined_chars_length, _undetermined_chars_hashcode.
+	* src/search.cc: Include gl_map.hh, gl_hash_map.h.
+	(Search::prepare_asso_values): Initialize the _undetermined_chars field.
+	(struct EquivalenceClass): Remove the fields _undetermined_chars,
+	_undetermined_chars_length.
+	(undetermined_equals, undetermined_hashcode): New functions.
+	(Search::compute_partition): Initialize the _undetermined_chars* fields
+	of all keywords. Use a hash map instead of a loop over the equivalence
+	classes.
+	(Search::find_good_asso_values): Deallocate the _undetermined_chars field.
+
+2025-04-19  Bruno Haible  <bruno@clisp.org>
+
+	Optimize: Make Bool_Array take less memory.
+	Less memory means: less cache misses.
+	This reduces the execution time of gperf on large inputs by ca. 2.5%.
+	* src/bool-array.h (Bool_Array): For the _storage_array and
+	_iteration_number fields, use 'unsigned char' instead of 'unsigned int'.
+	* src/bool-array.icc (Bool_Array::Bool_Array, Bool_Array::clear: Update.
+	* src/bool-array.cc (Bool_Array::~Bool_Array): Update.
+
+2025-04-19  Bruno Haible  <bruno@clisp.org>
+
+	tests: Add unit test with many keywords.
+	* tests/generate-5000.sh: New file.
+	* tests/5000.gperf: New generated file.
+	* tests/5000.exp: New generated file.
+	* tests/Makefile.in (SOURCE_FILES): Add them.
+	(check-large): New rule.
+
+2025-04-19  Bruno Haible  <bruno@clisp.org>
+
+	build: Update dependencies after 2025-04-16 change.
+	* src/Makefile.in (*.$(OBJEXT)): Depend on $(CONFIG_H).
+
+2025-04-17  Bruno Haible  <bruno@clisp.org>
+
+	Improve comments.
+	* src/search.cc: Fix comments.
+
+2025-04-16  Bruno Haible  <bruno@clisp.org>
+
+	build: Update after gnulib changed.
+	* gnulib-local/lib/getopt-pfx-ext.h.diff: Remove file.
+	* Makefile.in (SOURCE_FILES): Remove it.
+
+	build: Use more gnulib modules.
+	* autogen.sh (GNULIB_MODULES): Add getopt-gnu.
+	Use directory gnulib-local.
+	* gnulib-local/lib/getopt-pfx-ext.h.diff: New file.
+	* Makefile.in (SOURCE_FILES): Add it.
+	(distdir): Use 'mkdir -p' instead of 'mkdir'.
+	* lib/getopt.h: Remove file.
+	* lib/getopt.c: Remove file.
+	* lib/getopt1.c: Remove file.
+	* lib/Makefile.am (libgp_a_SOURCES): Remove them.
+
+2025-04-16  Bruno Haible  <bruno@clisp.org>
+
+	build: Use more gnulib modules.
+	* autogen.sh (GNULIB_MODULES): Add read-file.
+	Copy also config.guess and config.sub.
+	* lib/Makefile.am (BUILT_SOURCES, MOSTLYCLEANDIRS): New variables.
+	(libgp_a_SOURCES): Remove getline.h, getline.cc.
+	* lib/getline.h: Remove file.
+	* lib/getline.cc: Remove file.
+	* src/configure.ac: Change config.h to also include ../lib/config.h.
+	* src/output.cc: Include <config.h> first.
+	* src/search.cc: Likewise.
+	* src/bool-array.cc: Include <config.h>.
+	* src/keyword.cc: Likewise.
+	* src/keyword-list.cc: Likewise.
+	* src/hash-table.cc: Likewise.
+	* src/main.cc: Likewise.
+	* src/options.cc: Likewise.
+	* src/positions.cc: Likewise.
+	* src/version.cc: Likewise.
+	* src/input.cc: Likewise. Include read-file.h instead of getline.h.
+	(Input<KT>::read_input): Use fread_file instead of get_delim.
+
+2025-04-16  Bruno Haible  <bruno@clisp.org>
+
+	build: Prepare for using generated .h files in lib/.
+	* src/Makefile.in (CPPFLAGS): Add more -I options.
+
+2025-04-16  Bruno Haible  <bruno@clisp.org>
+
+	build: Use gnulib-tool with a module list.
+	* .gitmodules: New file.
+	* gitsub.sh: New file, from gnulib/top/gitsub.sh.
+	* autopull.sh: Use gitsub.sh to check out gnulib.
+	* autogen.sh: Accept --skip-gnulib option. Invoke gnulib-tool, assuming
+	a gnulib checkout is already present.
+	* Makefile.devel (lib/aclocal.m4): Update reference to macros directory.
+	* lib/configure.ac: Likewise. Invoke gl_EARLY, gl_INIT.
+	* lib/Makefile.am (EXTRA_DIST, MOSTLYCLEANFILES): New variables.
+	Include Makefile.gnulib.
+
+2025-04-16  Bruno Haible  <bruno@clisp.org>
+
+	build: Use Automake in lib/.
+	* autopull.sh: Copy also m4/init-package-version.m4.
+	* autogen.sh: Mention the requirement for Automake.
+	* Makefile.devel (lib/aclocal.m4, lib/config.h.in, lib/Makefile.in): New
+	rules.
+	(lib/configure): Use lib/aclocal.m4 instead of the top-level aclocal.m4.
+	(src/config.h.in): Fix rule.
+	(totally-clean): Remove the new generated files.
+	* lib/configure.ac: Require Autoconf >= 2.70. Change AC_INIT invocation.
+	Invoke AC_CONFIG_MACRO_DIRS, gl_INIT_PACKAGE_VERSION, AM_INIT_AUTOMAKE,
+	AC_CONFIG_HEADERS. Don't invoke AC_MAKE_SET, AC_PROG_CPP,
+	AC_PROG_CXXCPP, AC_PROG_INSTALL.
+	* lib/Makefile.am: New file.
+	* lib/Makefile.in: Remove file.
+	* Makefile.in (IMPORTED_FILES): Remove lib/filename.h.
+
 2025-04-13  Bruno Haible  <bruno@clisp.org>
 
 	Release gperf-3.2.1.
