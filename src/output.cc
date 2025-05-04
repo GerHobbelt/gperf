@@ -975,6 +975,7 @@ Output::output_hash_function () const
 
   if (option[KRC] | option[C] | option[ANSIC])
     printf ("static ");
+  // TODO size_t
   printf ("unsigned int\n");
   if (option[CPLUSPLUS])
     printf ("%s::", option.get_class_name ());
@@ -1113,8 +1114,10 @@ Output::output_hash_function () const
                 "      __attribute__ ((__fallthrough__));\n"
                 "#endif\n"
                 "      /*FALLTHROUGH*/\n";
-              /* It doesn't really matter whether hval is an 'int' or
-                 'unsigned int', but 'unsigned int' gives fewer warnings.  */
+          /* It doesn't really matter whether hval is an 'int' or
+             'unsigned int', but 'unsigned int' gives fewer warnings.
+             Truncates size_t to unsigned len. Would need to & UINT_MAX here.
+          */
               printf ("  %sunsigned int hval = %s;\n\n"
                       "  switch (%s)\n"
                       "    {\n"
