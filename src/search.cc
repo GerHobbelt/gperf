@@ -30,10 +30,11 @@
 #include <math.h> /* declares exp() */
 #include <limits.h> /* defines INT_MIN, INT_MAX, UINT_MAX, CHAR_BIT */
 #include <map>
+#include <unordered_map>
+#include <functional>
 #include "options.h"
 #include "arraylist.h"
 #include "hash-table.h"
-//#include "config.h"
 #include "nbperf.h"
 
 /* ============================== Portability ============================== */
@@ -999,7 +1000,7 @@ equals (const unsigned int *ptr1, const unsigned int *ptr2, unsigned int len)
 }
 
 static bool
-undetermined_equals (KeywordExt *key1, KeywordExt *key2)
+undetermined_equals (const KeywordExt *key1, const KeywordExt *key2)
 {
   return (key1->_undetermined_chars_length == key2 ->_undetermined_chars_length)
          && equals (key1->_undetermined_chars, key2->_undetermined_chars,
@@ -1007,7 +1008,7 @@ undetermined_equals (KeywordExt *key1, KeywordExt *key2)
 }
 
 static size_t
-undetermined_hashcode (KeywordExt *key)
+undetermined_hashcode (const KeywordExt *key)
 {
   return key->_undetermined_chars_hashcode;
 }
@@ -1027,6 +1028,28 @@ cmp_equiv_classes (void const *ptr1, void const *ptr2)
 	  rv == std::strong_ordering::equal ? 0 :
 	  -1;
 }
+
+struct Key
+{
+	const KeywordExt* _keyword = nullptr;
+
+	/* Constructor.  */
+	Key() = default;
+	Key(const KeywordExt *k): _keyword(k) {}
+
+	bool operator==(const Key &other) const {
+		return undetermined_equals(this->_keyword, other._keyword);
+	}
+};
+
+template <>
+struct std::hash<Key>
+{
+	std::size_t operator()(const Key& k) const
+	{
+		return undetermined_hashcode(k._keyword);
+	}
+};
 
 Partition *
 Search::compute_partition (bool *undetermined) const
@@ -1058,33 +1081,34 @@ Search::compute_partition (bool *undetermined) const
 
   Partition *partition = new Partition ();
   {
-    /* A hash-map that maps each keyword to the EquivalenceClass that contains
+	  /* A hash-map that maps each keyword to the EquivalenceClass that contains
        it.  */
-    std::map<KeywordExt *, void const *>
-      map (GL_HASH_MAP, undetermined_equals, undetermined_hashcode, NULL, NULL);
+    std::unordered_map<Key, size_t> map;
     for (KeywordExt_List *temp = _head; temp; temp = temp->rest())
       {
         KeywordExt *keyword = temp->first();
 
         /* Look up the equivalence class to which this keyword belongs.  */
-        size_t pindex = reinterpret_cast<size_t>(map.get(keyword)) - 1;
-        if (pindex == (size_t)-1)
+        auto cursor = map.find(keyword);
+        if (cursor == map.end())
           {
             /* Allocate a new EquivalenceClass and add it as the last element to
                the partition.  */
             char temp_storage[sizeof (EquivalenceClass)];
             EquivalenceClass * temp_equclass = new (temp_storage) EquivalenceClass ();
-            pindex = partition->_equclasses.add_last (* temp_equclass);
+            size_t pindex = partition->_equclasses.add_last (* temp_equclass);
 
             /* Map this keyword (and all equivalent ones that will be seen later)
                to the equivalence class number pindex.  */
-            map.put(keyword, reinterpret_cast<void *>(pindex + 1));
+            map.insert(std::make_pair(keyword, pindex));
           }
 
         /* Add the keyword to the equivalence class number pindex.  */
-        partition->_equclasses.get_at(pindex)._keywords.add_last (keyword);
+		{
+			size_t pindex = cursor->second;
+			partition->_equclasses.get_at(pindex)._keywords.add_last (keyword);
+		}
       }
-    map.free ();
   }
 
   /* Sort the equivalence classes according to decreasing size.

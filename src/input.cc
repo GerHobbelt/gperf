@@ -30,7 +30,79 @@
 using namespace std;
 #include <limits.h> /* defines UCHAR_MAX etc. */
 #include "options.h"
-#include "read-file.h"
+
+
+/* Read a STREAM and return a newly allocated string with the content,
+   and set *LENGTH to the length of the string.  The string is
+   zero-terminated, but the terminating zero byte is not counted in
+   *LENGTH.  On errors, *LENGTH is zero, errno preserves the
+   values set by system functions (if any), and NULL is returned.
+
+   The memory buffer internally allocated will be cleared upon failure.  */
+static char *
+fread_file (FILE *stream, size_t *length)
+{
+	if (length)
+		*length = 0;
+
+	size_t alloc = 64 * 1024;
+	char *buf = (char *)malloc(alloc);
+
+	if (!buf)
+		return NULL; /* errno is ENOMEM.  */
+
+	size_t size = 0; /* number of bytes read so far */
+	int saved_errno;
+
+	for (;;)
+	{
+		/* This probably reads more than the size of a regular file
+		   so that we can get eof immediately.  */
+		size_t requested = alloc - size;
+		size_t count = fread (buf + size, 1, requested, stream);
+		size += count;
+
+		if (count != requested)
+		{
+			saved_errno = errno;
+			if (ferror (stream))
+				break;
+
+			/* Shrink the allocated memory if possible.  */
+			buf = (char *)realloc(buf, size + 1);
+			if (!buf)
+				return NULL; /* errno is ENOMEM.  */
+
+			buf[size] = '\0';
+			*length = size;
+			return buf;
+		}
+
+		{
+			size_t saved_alloc = alloc;
+
+			if (alloc == PTRDIFF_MAX)
+			{
+				saved_errno = ENOMEM;
+				break;
+			}
+
+			if (alloc < PTRDIFF_MAX - alloc / 2)
+				alloc = alloc + alloc / 2;
+			else
+				alloc = PTRDIFF_MAX;
+
+			buf = (char *)realloc(buf, alloc);
+			if (!buf)
+				return NULL; /* errno is ENOMEM.  */
+		}
+	}
+
+	free (buf);
+	errno = saved_errno;
+	return NULL;
+}
+
 
 template <class KT>
   Input<KT>::Input (FILE *stream, Keyword_Factory<KT> *keyword_factory)
@@ -256,7 +328,7 @@ template <class KT>
        otherwise for the second interpretation.  */
 
     size_t input_length;
-    char *input = fread_file (_stream, 0, &input_length);
+    char *input = fread_file (_stream, &input_length);
     if (input == NULL)
       {
         if (ferror (_stream))
