@@ -1,5 +1,5 @@
 /* Output routines.
-   Copyright (C) 1989-1998, 2000, 2002-2004, 2006-2007, 2009, 2011-2012, 2016, 2018, 2021, 2023 Free Software Foundation, Inc.
+   Copyright (C) 1989-2025 Free Software Foundation, Inc.
    Written by Douglas C. Schmidt <schmidt@ics.uci.edu>
    and Bruno Haible <bruno@clisp.org>.
 
@@ -1103,7 +1103,7 @@ Output::output_hash_function () const
               /* Pseudo-statement or comment that avoids a compiler warning or
                  lint warning.  */
               const char * const fallthrough_marker =
-            "#if (defined __cplusplus && (__cplusplus >= 201703L || (__cplusplus >= 201103L && defined __clang__ && __clang_major__ + (__clang_minor__ >= 9) > 3))) || (__STDC_VERSION__ >= 202000L && ((defined __GNUC__ && __GNUC__ >= 10) || (defined __clang__ && __clang_major__ >= 9)))\n"
+            "#if (defined __cplusplus && (__cplusplus >= 201703L || (__cplusplus >= 201103L && defined __clang__ && __clang_major__ + (__clang_minor__ >= 9) > 3))) || (defined __STDC_VERSION__ && __STDC_VERSION__ >= 202000L && ((defined __GNUC__ && __GNUC__ >= 10) || (defined __clang__ && __clang_major__ >= 9)))\n"
                 "      [[fallthrough]];\n"
             "#elif (defined __GNUC__ && __GNUC__ >= 7) || (defined __clang__ && __clang_major__ >= 10)\n"
                 "      __attribute__ ((__fallthrough__));\n"
@@ -1940,6 +1940,17 @@ output_switches (KeywordExt_List *list, int num_switches, int size, int min_hash
 void
 Output::output_lookup_function_body (const Output_Compare& comparison) const
 {
+  /* An expression equivalent to NULL, of type _return_type.
+     We don't use plain "0", because that would trigger a gcc 15 warning
+     if the warning option -Wzero-as-null-pointer-constant is in use.
+     In C++, using "nullptr" if __cplusplus >= 201103L would be possible,
+     but is not worth the trouble.  */
+  char *null_expression = new char[17 + strlen (_return_type) + 1];
+  if (option[CPLUSPLUS])
+    sprintf (null_expression, "static_cast<%s> (0)", _return_type);
+  else
+    sprintf (null_expression, "(%s) 0", _return_type);
+
   printf ("  if (len <= %sMAX_WORD_LENGTH && len >= %sMIN_WORD_LENGTH)\n"
           "    {\n"
           "      %sunsigned int key = %s (str, len);\n\n",
@@ -1988,7 +1999,8 @@ Output::output_lookup_function_body (const Output_Compare& comparison) const
 
       output_switches (_head, num_switches, switch_size, _min_hash_value, _max_hash_value, 10);
 
-      printf ("          return 0;\n");
+      printf ("          return %s;\n",
+              null_expression);
       if (option[DUP] && _total_duplicates > 0)
         {
           int indent = 8;
@@ -2031,8 +2043,8 @@ Output::output_lookup_function_body (const Output_Compare& comparison) const
                     indent, "");
           printf ("%*s      wordptr++;\n"
                   "%*s    }\n"
-                  "%*s  return 0;\n",
-                  indent, "", indent, "", indent, "");
+                  "%*s  return %s;\n",
+                  indent, "", indent, "", indent, "", null_expression);
         }
       printf ("        compare:\n");
       if (option[TYPE])
@@ -2254,7 +2266,10 @@ Output::output_lookup_function_body (const Output_Compare& comparison) const
         }
     }
   printf ("    }\n"
-          "  return 0;\n");
+          "  return %s;\n",
+          null_expression);
+
+  delete[] null_expression;
 }
 
 /* Generates C code for the lookup function.  */

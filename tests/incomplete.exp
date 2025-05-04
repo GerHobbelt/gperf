@@ -1,4 +1,4 @@
-/* ANSI-C code produced by gperf version 3.3-beta */
+/* ANSI-C code produced by gperf version 3.2.1 */
 /* Command-line: gperf -t  */
 /* Computed positions: -k'1,3' */
 
@@ -121,5 +121,5 @@ in_word_set (register const char *str, register size_t len)
             return &wordlist[key];
         }
     }
-  return 0;
+  return (struct month *) 0;
 }

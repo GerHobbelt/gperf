@@ -2,7 +2,7 @@
 
 /* Keyword data.
 
-   Copyright (C) 1989-1998, 2000, 2002-2003, 2017 Free Software Foundation, Inc.
+   Copyright (C) 1989-1998, 2000, 2002-2003, 2017, 2025 Free Software Foundation, Inc.
    Written by Douglas C. Schmidt <schmidt@ics.uci.edu>
    and Bruno Haible <bruno@clisp.org>.
 
@@ -82,23 +82,23 @@ private:
   unsigned int *        init_selchars_low (const Positions& positions, const unsigned int *alpha_unify, const unsigned int *alpha_inc);
 };
 
-/* An abstract factory for creating Keyword instances.
+/* A factory for creating Keyword instances.
    This factory is used to make the Input class independent of the concrete
    class KeywordExt.  */
 
-class Keyword_Factory
-{
-public:
-  /* Constructor.  */
-                        Keyword_Factory ();
-  /* Destructor.  */
-  virtual               ~Keyword_Factory ();
+template <class KT>
+  class Keyword_Factory
+  {
+  public:
+    /* Constructor.  */
+                          Keyword_Factory ();
+    /* Destructor.  */
+    virtual               ~Keyword_Factory ();
 
-  /* Creates a new Keyword.  */
-  virtual /*abstract*/ Keyword *
-                        create_keyword (const char *allchars, int allchars_length,
-                                        const char *rest, unsigned int lineno) = 0;
-};
+    /* Creates a new Keyword.  */
+    virtual KT *          create_keyword (const char *allchars, int allchars_length,
+                                          const char *rest, unsigned int lineno);
+  };
 
 /* A statically allocated empty string.  */
 extern char empty_string[1];
