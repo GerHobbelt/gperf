@@ -50,7 +50,7 @@ public:
                                 const char *verbatim_code_end,
                                 unsigned int verbatim_code_lineno,
                                 bool charset_dependent,
-				int total_keys,
+				long int total_keys,
 				int max_key_len,
 				int min_key_len,
 				bool hash_includes_len,

@@ -3,6 +3,10 @@ variables:
 
 # make fails in doc with epsf.tex and f.tex on images, so skip it.
 
+before_script:
+  - apt-get update -qq
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y texinfo texlive
+
 gcc:
   script:
     - sh autogen.sh
