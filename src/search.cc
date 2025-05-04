@@ -1100,7 +1100,8 @@ Search::compute_partition (bool *undetermined) const
 
             /* Map this keyword (and all equivalent ones that will be seen later)
                to the equivalence class number pindex.  */
-            map.insert(std::make_pair(keyword, pindex));
+			auto [c, _] = map.insert(std::make_pair(keyword, pindex));
+			cursor = c;
           }
 
         /* Add the keyword to the equivalence class number pindex.  */
