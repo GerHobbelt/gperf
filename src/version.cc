@@ -25,4 +25,4 @@
 #include "version.h"
 
 /* Current release version. */
-const char *version_string = "3.3";
+const char *version_string = "3.3-patched";
