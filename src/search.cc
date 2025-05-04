@@ -29,8 +29,7 @@
 #include <time.h> /* declares time() */
 #include <math.h> /* declares exp() */
 #include <limits.h> /* defines INT_MIN, INT_MAX, UINT_MAX, CHAR_BIT */
-#include "gl_map.hh"
-#include "gl_hash_map.h"
+#include <map>
 #include "options.h"
 #include "arraylist.h"
 #include "hash-table.h"
@@ -1027,7 +1026,10 @@ cmp_equiv_classes (void const *ptr1, void const *ptr2)
 {
   EquivalenceClass const *cls1 = static_cast<EquivalenceClass const *>(ptr1);
   EquivalenceClass const *cls2 = static_cast<EquivalenceClass const *>(ptr2);
-  return _GL_CMP (cls2->_keywords.size(), cls1->_keywords.size());
+  std::strong_ordering rv = cls2->_keywords.size() <=> cls1->_keywords.size();
+  return rv == std::strong_ordering::less ? +1 :
+	  rv == std::strong_ordering::equal ? 0 :
+	  -1;
 }
 
 Partition *
@@ -1062,7 +1064,7 @@ Search::compute_partition (bool *undetermined) const
   {
     /* A hash-map that maps each keyword to the EquivalenceClass that contains
        it.  */
-    gl_Map<KeywordExt *, void const *>
+    std::map<KeywordExt *, void const *>
       map (GL_HASH_MAP, undetermined_equals, undetermined_hashcode, NULL, NULL);
     for (KeywordExt_List *temp = _head; temp; temp = temp->rest())
       {
