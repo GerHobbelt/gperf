@@ -4,7 +4,7 @@
 # also regenerates all config.h.in, configure files with new versions of
 # autoconf.
 #
-# This script requires autoconf-2.64..2.72 and automake-1.16.4..1.17 in the PATH.
+# This script requires autoconf-2.64..2.72 and automake-1.16.4..1.18 in the PATH.
 
 # Copyright (C) 2003-2025 Free Software Foundation, Inc.
 #
