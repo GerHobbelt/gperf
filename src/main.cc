@@ -48,6 +48,43 @@ Keyword_Factory<KeywordExt>::create_keyword (const char *allchars, int allchars_
   return new KeywordExt (allchars, allchars_length, rest, lineno);
 }
 
+// constructor:
+template <>
+Keyword_Factory<KeywordExt>::Keyword_Factory()
+{
+}
+
+// constructor:
+template <>
+Keyword_Factory<KeywordExt>::~Keyword_Factory()
+{
+}
+
+/* ------------------------------------------------------------------------- */
+
+// see bottom of keyword.cc for more info why this template specialization statement has been moved here...
+
+/* Explicit template instantiations.  Needed to avoid link-time errors.
+
+   C++ is just misdesigned:  The most important aspect in building large
+   software packages is information hiding.  (That's the point of having the
+   implementation of a .h file in a .cc file, isn't it?  And of having
+   classes with private fields and methods, isn't it?)  The fact that we
+   need the instantiation of the Keyword_Factory<KT> class only for
+   KT = KeywordExt comes from the code in main.cc.  It is ugly that
+   implementation details of main.cc have an influence into this file here.  */
+
+template class Keyword_Factory<KeywordExt>;
+
+// --> and moving this here from keyword.cc resulted in new warnings, which were kinda expected
+// as the constructor and destructor don't have default implementations specified in the template
+// definition:
+//
+// - warning C4661: 'Keyword_Factory<KeywordExt>::Keyword_Factory(void)': no suitable definition provided for explicit template instantiation request
+// - warning C4661: 'Keyword_Factory<KeywordExt>::~Keyword_Factory(void)': no suitable definition provided for explicit template instantiation request
+//
+// --> provide these as well, *above*!
+
 /* ------------------------------------------------------------------------- */
 
 int

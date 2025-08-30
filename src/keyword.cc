@@ -174,6 +174,29 @@ char empty_string[1] = "";
    KT = KeywordExt comes from the code in main.cc.  It is ugly that
    implementation details of main.cc have an influence into this file here.  */
 
+#if 0 // moved to main.cc
+
 template class Keyword_Factory<KeywordExt>;
+
+// fix MSVC warning about no proper implementation of template method provided:
+// 
+// warning C4661: 'KT *Keyword_Factory<KT>::create_keyword(const char *,int,const char *,unsigned int)': no suitable definition provided for explicit template instantiation request
+// with [ KT=KeywordExt ]; see declaration of 'Keyword_Factory<KeywordExt>::create_keyword'.
+//
+// + warning C5259: 'Keyword_Factory<KeywordExt>::create_keyword': explicit specialization requires 'template <>'
+//
+// --> main.obj: error LNK2005: "public: virtual struct KeywordExt * __cdecl Keyword_Factory<struct KeywordExt>::create_keyword(char const *,int,char const *,unsigned int)"
+//               already defined in keyword.obj
+//     fatal error LNK1169: one or more multiply defined symbols found
+//
+// --> this template specialization MUST be moved to main.cc itself, as we don't want the original MSVC warning either.
+
+template <>
+KeywordExt* Keyword_Factory<KeywordExt>::create_keyword(const char *allchars, int allchars_length,
+										  const char *rest, unsigned int lineno) {
+	return nullptr;
+}
+
+#endif
 
 /* ------------------------------------------------------------------------- */

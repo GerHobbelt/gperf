@@ -1057,7 +1057,7 @@ Options::parse_options (int argc, char *argv[])
         case 'h':               /* Displays a list of helpful Options to the user.  */
           {
             long_usage (stdout);
-            exit (0);
+			exit(0);
           }
         case 'H':               /* Sets the name for the hash function.  */
           {
