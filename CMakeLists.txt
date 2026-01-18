@@ -39,6 +39,7 @@ set_target_properties(gp-lib PROPERTIES
 
 # Executable
 file(GLOB gperf_src_files src/*.cc)
+list(APPEND gperf_src_files src/mi_vector_hash.c)
 add_executable(gperf ${gperf_src_files})
 target_include_directories(gperf PUBLIC lib src)
 target_link_libraries(gperf gp-lib)
